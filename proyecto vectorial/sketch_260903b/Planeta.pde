@@ -40,6 +40,41 @@ class Planeta {
   float anguloOrbital = 0;
   float inclinacionRad = 0;
 
+  // --- Seguimiento de logros para Vuelo Libre (TEMA 1.1: ángulo como
+  // función del vector posición relativo nave-planeta) ---
+  boolean visitado = false;         // ¿ya te acercaste lo suficiente al menos una vez?
+  boolean orbitaCompletada = false; // ¿diste una vuelta completa (360°) sin alejarte demasiado?
+  float anguloAcumuladoOrbita = 0;
+  float anguloAnteriorOrbita = 0;
+  boolean rastreoOrbitaActivo = false;
+
+  // Se llama cada cuadro en Vuelo Libre: si la nave está "cerca" del
+  // planeta (ni pegada ni demasiado lejos), va sumando el ángulo que
+  // recorre alrededor de él. Si llega a 360°, cuenta como una órbita.
+  void actualizarSeguimientoOrbita(Nave nave) {
+    Vector3D relativo = nave.posicion.calcularDistancia(this.posicion); // planeta -> nave
+    float distancia = relativo.magnitud();
+    float bandaMin = radioVisual + 40;
+    float bandaMax = radioVisual * 6;
+
+    if (distancia >= bandaMin && distancia <= bandaMax) {
+      float anguloActual = atan2(relativo.y, relativo.x);
+      if (rastreoOrbitaActivo) {
+        float delta = anguloActual - anguloAnteriorOrbita;
+        if (delta > PI) delta -= TWO_PI;   // normaliza el salto -PI/PI
+        if (delta < -PI) delta += TWO_PI;
+        anguloAcumuladoOrbita += abs(delta);
+      }
+      anguloAnteriorOrbita = anguloActual;
+      rastreoOrbitaActivo = true;
+      if (anguloAcumuladoOrbita >= TWO_PI) orbitaCompletada = true;
+    } else {
+      // Te saliste de la banda de distancia: hay que volver a dar la vuelta completa
+      anguloAcumuladoOrbita = 0;
+      rastreoOrbitaActivo = false;
+    }
+  }
+
   Planeta(String nombre, float x, float y, float z, float masa, float radioVisual, PImage textura) {
     this.nombre = nombre;
     posicion = new Vector3D(x, y, z);
