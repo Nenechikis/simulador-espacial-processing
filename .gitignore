@@ -2,9 +2,19 @@
 out/
 *.class
 
-# Configuración local de IntelliJ IDEA
-.idea/
-*.iml
+# Archivos locales/personales de IntelliJ (no compartir entre máquinas)
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionaries/
+.idea/shelf/
+.idea/httpRequests/
+.idea/queries/
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/misc.xml
+.idea/vcs.xml
 
-# Archivos del sistema macOS
+# Archivos del sistema (macOS y Windows)
 .DS_Store
+Thumbs.db
