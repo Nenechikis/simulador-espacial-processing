@@ -1,0 +1,10 @@
+# Archivos compilados de Java / IntelliJ
+out/
+*.class
+
+# Configuración local de IntelliJ IDEA
+.idea/
+*.iml
+
+# Archivos del sistema macOS
+.DS_Store
