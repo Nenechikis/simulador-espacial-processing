@@ -174,11 +174,44 @@ public class Planeta {
     return fuerza;
   }
 
+  // TEMAS 4 y 5 (Cap. 12.5): Potencial gravitatorio escalar Phi(r) = -G * M / r
+  float calcularPotencialEnPunto(Vector3D puntoEspacio) {
+    float distancia = max(posicion.calcularDistancia(puntoEspacio).magnitud(), this.radioVisual);
+    return -(app.G_GRAVEDAD * this.masa) / distancia;
+  }
+
+  // MECÁNICA ORBITAL (Cap. 13.2 y 13.4): velocidad circular y velocidad de escape a distancia d
+  float velocidadCircularA(float distancia) {
+    float d = max(distancia, this.radioVisual);
+    return sqrt((app.G_GRAVEDAD * this.masa) / d);
+  }
+
+  float velocidadEscapeA(float distancia) {
+    float d = max(distancia, this.radioVisual);
+    return sqrt((2.0f * app.G_GRAVEDAD * this.masa) / d);
+  }
+
   void dibujar() {
     app.pushMatrix();
     app.translate(posicion.x, posicion.y, posicion.z);
+    app.pushMatrix();
     app.rotateY(app.frameCount * 0.005f);
     app.shape(globo);
+    app.popMatrix();
+
+    // Anillos de Saturno en 3D
+    if (nombre.equalsIgnoreCase("Saturno")) {
+      app.pushMatrix();
+      app.rotateX(radians(22));
+      app.noFill();
+      app.strokeWeight(2);
+      for (float r = radioVisual * 1.35f; r <= radioVisual * 2.15f; r += 6.0f) {
+        app.stroke(215, 195, 145, 95);
+        app.ellipse(0, 0, r * 2, r * 2);
+      }
+      app.noStroke();
+      app.popMatrix();
+    }
     app.popMatrix();
   }
 }

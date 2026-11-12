@@ -106,4 +106,19 @@ public class Vector3D {
     cosTheta = max(-1, min(1, cosTheta));
     return acos(cosTheta); // Retorna en radianes
   }
+
+  // Copia independiente del vector para no modificar el original
+  Vector3D copia() {
+    return new Vector3D(this.x, this.y, this.z);
+  }
+
+  // ---------- TEMA 3 — Funciones vectoriales y Curvatura (Cap. 11.7) ----------
+  // Curvatura instantánea de la trayectoria:
+  // kappa = ||r'(t) x r''(t)|| / ||r'(t)||^3 = ||v x a|| / ||v||^3
+  static float calcularCurvatura(Vector3D velocidad, Vector3D aceleracion) {
+    float rapidez = velocidad.magnitud();
+    if (rapidez < 0.0001f) return 0;
+    Vector3D cruz = velocidad.productoCruz(aceleracion);
+    return cruz.magnitud() / (rapidez * rapidez * rapidez);
+  }
 }
