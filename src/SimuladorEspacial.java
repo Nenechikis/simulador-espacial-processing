@@ -113,6 +113,9 @@ public class SimuladorEspacial extends PApplet {
 
   float camX = 0;
   float camY = 0;
+  float focoX = 0; // Punto 3D sobre el cual pivota la rotación de la cámara
+  float focoY = 0;
+  float focoZ = 0;
   float zoom = -2600;
   float rotX = 0; // Inclinación 3D de la cámara (flechas arriba/abajo o clic derecho)
   float rotY = 0; // Giro 3D de la cámara (flechas izq/der o clic derecho)
@@ -153,7 +156,7 @@ public class SimuladorEspacial extends PApplet {
     for (int i = 0; i < estrellasX.length; i++) {
       estrellasX[i] = random(-LIMITE_MUNDO, LIMITE_MUNDO);
       estrellasY[i] = random(-LIMITE_MUNDO, LIMITE_MUNDO);
-      estrellasZ[i] = random(-3500, 0);
+      estrellasZ[i] = random(-LIMITE_MUNDO, LIMITE_MUNDO);
     }
     reiniciarNivel(0);
   }
@@ -224,7 +227,8 @@ public class SimuladorEspacial extends PApplet {
     reiniciarNave();
     if (estadoJuego == 1) miNave.velocidad = new Vector3D(2.0f, 0, 0);
 
-    camX = 0; camY = 0; zoom = -2600; rotX = 0; rotY = 0; seguirNave = false;
+    camX = 0; camY = 0; focoX = 0; focoY = 0; focoZ = 0;
+    zoom = -2600; rotX = 0; rotY = 0; seguirNave = false;
   }
 
   void alternarPantallaCompleta() {
@@ -279,22 +283,29 @@ public class SimuladorEspacial extends PApplet {
       }
       // Rotación 3D de la cámara con las flechas del teclado para apreciar el eje Z
       if (estadoJuego != 0 && key == CODED) {
-        if (keyCode == UP)    rotX = constrain(rotX + 0.02f, -HALF_PI + 0.1f, HALF_PI - 0.1f);
-        if (keyCode == DOWN)  rotX = constrain(rotX - 0.02f, -HALF_PI + 0.1f, HALF_PI - 0.1f);
-        if (keyCode == LEFT)  rotY -= 0.02f;
-        if (keyCode == RIGHT) rotY += 0.02f;
+        if (keyCode == UP)    rotX += 0.025f;
+        if (keyCode == DOWN)  rotX -= 0.025f;
+        if (keyCode == LEFT)  rotY -= 0.025f;
+        if (keyCode == RIGHT) rotY += 0.025f;
       }
     }
 
     if (seguirNave && estadoJuego != 0) {
-      camX = -miNave.posicion.x;
-      camY = -miNave.posicion.y;
+      focoX = miNave.posicion.x;
+      focoY = miNave.posicion.y;
+      focoZ = miNave.posicion.z;
+      camX = 0;
+      camY = 0;
     }
 
     pushMatrix();
+    // 1. Colocamos el pivote de la cámara en el centro de la pantalla a distancia 'zoom'
     translate(width/2.0f + camX, height/2.0f + camY, zoom);
+    // 2. Rotamos la vista 3D alrededor de ese pivote
     rotateX(rotX);
     rotateY(rotY);
+    // 3. Desplazamos el mundo para que el foco (la nave o el Sol) quede exactamente en el pivote (0,0,0)
+    translate(-focoX, -focoY, -focoZ);
     directionalLight(255, 255, 255, 1, 1, -1);
     ambientLight(40, 40, 50);
 
@@ -726,9 +737,16 @@ public class SimuladorEspacial extends PApplet {
   public void keyReleased() {
     if (key == ' ') modoProfesor = !modoProfesor;
     if (key == 'f' || key == 'F') alternarPantallaCompleta();
-    if (key == 'c' || key == 'C') seguirNave = !seguirNave;
+    if (key == 'c' || key == 'C') {
+      seguirNave = !seguirNave;
+      if (seguirNave) {
+        camX = 0;
+        camY = 0;
+      }
+    }
     if (key == 'v' || key == 'V') {
-      camX = 0; camY = 0; zoom = -2600; rotX = 0; rotY = 0; seguirNave = false;
+      camX = 0; camY = 0; focoX = 0; focoY = 0; focoZ = 0;
+      zoom = -2600; rotX = 0; rotY = 0; seguirNave = false;
     }
     if ((key == 'r' || key == 'R') && estadoJuego == 5) {
       reiniciarNave();
@@ -742,7 +760,7 @@ public class SimuladorEspacial extends PApplet {
     if (estadoJuego != 0) {
       if (mouseButton == RIGHT) {
         rotY += (mouseX - pmouseX) * 0.007f;
-        rotX = constrain(rotX - (mouseY - pmouseY) * 0.007f, -HALF_PI + 0.1f, HALF_PI - 0.1f);
+        rotX -= (mouseY - pmouseY) * 0.007f;
       } else {
         seguirNave = false;
         camX = constrain(camX + (mouseX - pmouseX) * SENSIBILIDAD_ARRASTRE, -LIMITE_MUNDO, LIMITE_MUNDO);
