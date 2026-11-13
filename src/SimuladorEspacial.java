@@ -622,12 +622,15 @@ public class SimuladorEspacial extends PApplet {
     }
   }
 
-  // Para el Modo Misión: detecta el fin (llegada, perdido, o se acabó
-  // el tiempo) y pasa a la pantalla de Resultado.
+  // Para el Modo Misión: detecta el fin (llegada a la superficie o paso por el
+  // punto más cercano dentro del umbral de éxito, perdido, o se acabó el tiempo)
+  // y pasa a la pantalla de Resultado.
   void verificarFinMision() {
     boolean termino = false;
+    float distanciaActual = objetivoMision.posicion.calcularDistancia(miNave.posicion).magnitud();
     if (miNave.posicion.magnitud() > LIMITE_MUNDO) termino = true;
-    if (objetivoMision.posicion.calcularDistancia(miNave.posicion).magnitud() < objetivoMision.radioVisual + 70) termino = true;
+    if (distanciaActual <= objetivoMision.radioVisual) termino = true;
+    if (distanciaMinimaAlcanzada < objetivoMision.radioVisual + 70 && distanciaActual > distanciaMinimaAlcanzada + 1.0f) termino = true;
     if (framesSimulacion >= MAX_FRAMES_SIMULACION) termino = true;
 
     if (termino) {
