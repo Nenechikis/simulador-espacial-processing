@@ -113,19 +113,32 @@ public class SimuladorEspacial extends PApplet {
 
   float camX = 0;
   float camY = 0;
+  float focoX = 0; // Punto 3D sobre el cual pivota la rotación de la cámara
+  float focoY = 0;
+  float focoZ = 0;
   float zoom = -2600;
-  float SENSIBILIDAD_ARRASTRE = 2.2f;
-  float SENSIBILIDAD_ZOOM = 220;
+  float rotX = 0; // Inclinación 3D de la cámara (flechas arriba/abajo o clic derecho)
+  float rotY = 0; // Giro 3D de la cámara (flechas izq/der o clic derecho)
+  boolean seguirNave = false; // 'C' para centrar la cámara en la nave
+  boolean enPantallaCompleta = false; // Estado de ventana maximizada / pantalla completa ('F')
+  final int ANCHO_VENTANA = 1024;
+  final int ALTO_VENTANA = 720;
+  float SENSIBILIDAD_ARRASTRE = 1.8f;
+  float SENSIBILIDAD_ZOOM = 55.0f; // Más suave para no perder de vista los planetas
+  final float ZOOM_MIN = -10500.0f; // Límite máximo al alejar (se ve hasta Neptuno)
+  final float ZOOM_MAX = -250.0f;   // Límite máximo al acercar
 
   PImage fotoSol, fotoMercurio, fotoVenus, fotoTierra, fotoLuna, fotoMarte, fotoJupiter, fotoSaturno, fotoUrano, fotoNeptuno;
 
   @Override
   public void settings() {
-    size(800, 600, P3D);
+    size(1024, 720, P3D);
   }
 
   @Override
   public void setup() {
+    surface.setTitle("Simulador Vectorial Espacial — Cálculo Vectorial");
+    surface.setResizable(true);
     textureMode(NORMAL);
 
     fotoSol      = loadImage("sol.jpg");
@@ -137,12 +150,13 @@ public class SimuladorEspacial extends PApplet {
     fotoJupiter  = loadImage("jupiter.jpg");
     fotoSaturno  = loadImage("saturno.jpg");
     fotoUrano    = loadImage("urano.jpg");
+    if (fotoUrano == null) fotoUrano = loadImage("uranio.jpg");
     fotoNeptuno  = loadImage("neptuno.jpg");
 
     for (int i = 0; i < estrellasX.length; i++) {
       estrellasX[i] = random(-LIMITE_MUNDO, LIMITE_MUNDO);
       estrellasY[i] = random(-LIMITE_MUNDO, LIMITE_MUNDO);
-      estrellasZ[i] = random(-3500, 0);
+      estrellasZ[i] = random(-LIMITE_MUNDO, LIMITE_MUNDO);
     }
     reiniciarNivel(0);
   }
@@ -213,7 +227,19 @@ public class SimuladorEspacial extends PApplet {
     reiniciarNave();
     if (estadoJuego == 1) miNave.velocidad = new Vector3D(2.0f, 0, 0);
 
-    camX = 0; camY = 0; zoom = -2600;
+    camX = 0; camY = 0; focoX = 0; focoY = 0; focoZ = 0;
+    zoom = -2600; rotX = 0; rotY = 0; seguirNave = false;
+  }
+
+  void alternarPantallaCompleta() {
+    enPantallaCompleta = !enPantallaCompleta;
+    if (enPantallaCompleta) {
+      surface.setLocation(0, 0);
+      surface.setSize(displayWidth, displayHeight);
+    } else {
+      surface.setSize(ANCHO_VENTANA, ALTO_VENTANA);
+      surface.setLocation(max(0, (displayWidth - ANCHO_VENTANA) / 2), max(0, (displayHeight - ALTO_VENTANA) / 2));
+    }
   }
 
   // Vuelve a poner la nave "despegando" de la Tierra, sin reconstruir
@@ -233,6 +259,10 @@ public class SimuladorEspacial extends PApplet {
   public void draw() {
     background(5, 5, 12);
 
+    // Ampliamos el plano de corte lejano (zFar = 60000) de OpenGL para que
+    // al alejar el zoom NUNCA desaparezcan los planetas lejanos.
+    perspective(PI / 3.0f, (float) width / max(1, height), 5.0f, 60000.0f);
+
     // Las órbitas SOLO avanzan en el Menú (para lucirse) y en Vuelo Libre.
     // Se CONGELAN durante el Modo Misión completo (selección/pizarrón/
     // simulación/resultado): el Reto asume que el objetivo no se mueve
@@ -242,17 +272,40 @@ public class SimuladorEspacial extends PApplet {
     }
 
     miNave.estaPropulsando = false;
-    if (estadoJuego == 1 && keyPressed) {
-      if (key == 'w' || key == 'W') miNave.propulsar(0, -0.03f, 0);
-      if (key == 's' || key == 'S') miNave.propulsar(0, 0.03f, 0);
-      if (key == 'a' || key == 'A') miNave.propulsar(-0.03f, 0, 0);
-      if (key == 'd' || key == 'D') miNave.propulsar(0.03f, 0, 0);
-      if (key == 'q' || key == 'Q') miNave.propulsar(0, 0, -0.03f);
-      if (key == 'e' || key == 'E') miNave.propulsar(0, 0, 0.03f);
+    if (keyPressed) {
+      if (estadoJuego == 1) {
+        if (key == 'w' || key == 'W') miNave.propulsar(0, -0.03f, 0);
+        if (key == 's' || key == 'S') miNave.propulsar(0, 0.03f, 0);
+        if (key == 'a' || key == 'A') miNave.propulsar(-0.03f, 0, 0);
+        if (key == 'd' || key == 'D') miNave.propulsar(0.03f, 0, 0);
+        if (key == 'q' || key == 'Q') miNave.propulsar(0, 0, -0.03f);
+        if (key == 'e' || key == 'E') miNave.propulsar(0, 0, 0.03f);
+      }
+      // Rotación 3D de la cámara con las flechas del teclado para apreciar el eje Z
+      if (estadoJuego != 0 && key == CODED) {
+        if (keyCode == UP)    rotX += 0.025f;
+        if (keyCode == DOWN)  rotX -= 0.025f;
+        if (keyCode == LEFT)  rotY -= 0.025f;
+        if (keyCode == RIGHT) rotY += 0.025f;
+      }
+    }
+
+    if (seguirNave && estadoJuego != 0) {
+      focoX = miNave.posicion.x;
+      focoY = miNave.posicion.y;
+      focoZ = miNave.posicion.z;
+      camX = 0;
+      camY = 0;
     }
 
     pushMatrix();
-    translate(width/2 + camX, height/2 + camY, zoom);
+    // 1. Colocamos el pivote de la cámara en el centro de la pantalla a distancia 'zoom'
+    translate(width/2.0f + camX, height/2.0f + camY, zoom);
+    // 2. Rotamos la vista 3D alrededor de ese pivote
+    rotateX(rotX);
+    rotateY(rotY);
+    // 3. Desplazamos el mundo para que el foco (la nave o el Sol) quede exactamente en el pivote (0,0,0)
+    translate(-focoX, -focoY, -focoZ);
     directionalLight(255, 255, 255, 1, 1, -1);
     ambientLight(40, 40, 50);
 
@@ -319,17 +372,21 @@ public class SimuladorEspacial extends PApplet {
     }
     popMatrix();
 
-    // --- INTERFAZ UI ---
+    // --- INTERFAZ UI (2D sobre la escena 3D sin ser tapada por planetas) ---
+    camera();
+    perspective();
+    hint(DISABLE_DEPTH_TEST);
+
     if (estadoJuego == 0) {
       dibujarMenuPrincipal();
     } else if (estadoJuego == 1) {
       fill(255); textSize(14);
-      text("MODO VUELO LIBRE | Mover: WASD (plano) + Q/E (profundidad) | Menú: 'M'", 20, 30);
-      text("Objetivo de referencia (para el ángulo del Modo Profesor): teclas 1-8", 20, 50);
-      text("Combustible: " + nf(max(0, miNave.combustible), 0, 1) + " L   |   Puntos: " + puntos, 20, height - 20);
+      text("MODO VUELO LIBRE | Mover: WASD + Q/E (eje Z) | Cámara: Flechas 3D, 'C' seguir nave, 'V' reset, 'F' pantalla completa | 'M' Menú", 20, 30);
+      text("Objetivo de referencia (para el ángulo y datos orbitales del Modo Profesor): teclas 1-8 (Actual: " + objetivoMision.nombre + ")", 20, 50);
+      text("Combustible: " + nf(max(0, miNave.combustible), 0, 1) + " L   |   Puntos: " + puntos + (seguirNave ? "   |   [Siguiendo Nave]" : ""), 20, height - 20);
       if (frameCount - mensajeLogroFrame < 180) {
         fill(255, 220, 0); textSize(16); textAlign(CENTER);
-        text(mensajeLogro, width/2, 70);
+        text(mensajeLogro, width/2.0f, 70);
         textAlign(LEFT);
       }
       verificarLimitesVueloLibre();
@@ -339,69 +396,98 @@ public class SimuladorEspacial extends PApplet {
       dibujarPizarronCalculo();
     } else if (estadoJuego == 4) {
       fill(255); textSize(14);
-      text("SIMULANDO TRAYECTORIA HACIA " + objetivoMision.nombre.toUpperCase() + "... | Menú: 'M'", 20, 30);
+      text("SIMULANDO TRAYECTORIA HACIA " + objetivoMision.nombre.toUpperCase() + "... | 'C' seguir nave | 'F' pantalla completa | Menú: 'M'", 20, 30);
       verificarFinMision();
     } else if (estadoJuego == 5) {
       dibujarResultadoMision();
     }
 
-    // TELEMETRÍA MODO PROFESOR (Cubre 1.3, 1.4 y 1.5 del Temario)
+    // TELEMETRÍA MODO PROFESOR (Cubre 1.3, 1.4, 1.5 + Temas 3, 4, 5 y Cap. 13 del Marco Teórico)
     if (modoProfesor && (estadoJuego == 1 || estadoJuego == 4)) {
       pushMatrix();
-      scale(escalaUI); // '+' / '-' para hacerla más grande o más chica
+      scale(escalaUI); // ']' / '[' para hacerla más grande o más chica
+      fill(0, 0, 0, 185); noStroke();
+      rect(12, 62, 545, 455, 8);
+
       fill(0, 200, 255); textSize(14);
-      text("====== TELEMETRÍA MATEMÁTICA AVANZADA ( ] [ zoom) ======", 20, 80);
+      text("====== TELEMETRÍA MATEMÁTICA AVANZADA ( ] [ zoom) ======", 20, 82);
 
       fill(255);
-      text("Vector Posición (r): " + nf(miNave.posicion.x, 0, 1) + "i, " + nf(miNave.posicion.y, 0, 1) + "j, " + nf(miNave.posicion.z, 0, 1) + "k", 20, 105);
+      text("Vector Posición (r): " + nf(miNave.posicion.x, 0, 1) + "i, " + nf(miNave.posicion.y, 0, 1) + "j, " + nf(miNave.posicion.z, 0, 1) + "k", 20, 104);
       fill(0, 255, 0);
-      text("Vector Velocidad (v): " + nf(miNave.velocidad.x, 0, 2) + "i, " + nf(miNave.velocidad.y, 0, 2) + "j, " + nf(miNave.velocidad.z, 0, 2) + "k", 20, 125);
+      text("Vector Velocidad (v): " + nf(miNave.velocidad.x, 0, 2) + "i, " + nf(miNave.velocidad.y, 0, 2) + "j, " + nf(miNave.velocidad.z, 0, 2) + "k  (|v|=" + nf(miNave.velocidad.magnitud(), 0, 2) + ")", 20, 124);
       fill(255, 255, 0);
-      text("Fuerza Neta (F): " + nf(fuerzaNeta.x, 0, 2) + "i, " + nf(fuerzaNeta.y, 0, 2) + "j, " + nf(fuerzaNeta.z, 0, 2) + "k", 20, 145);
+      text("Fuerza Neta (F): " + nf(fuerzaNeta.x, 0, 3) + "i, " + nf(fuerzaNeta.y, 0, 3) + "j, " + nf(fuerzaNeta.z, 0, 3) + "k", 20, 144);
 
       fill(255, 150, 255);
-      text("1.4 Ecuación de la Recta (Trayectoria):", 20, 175);
-      text("x = " + nf(miNave.posicion.x, 0, 1) + " + " + nf(miNave.velocidad.x, 0, 2) + " t", 30, 195);
-      text("y = " + nf(miNave.posicion.y, 0, 1) + " + " + nf(miNave.velocidad.y, 0, 2) + " t", 30, 215);
-      text("z = " + nf(miNave.posicion.z, 0, 1) + " + " + nf(miNave.velocidad.z, 0, 2) + " t", 30, 235);
+      text("1.4 Ecuación de la Recta (Trayectoria):", 20, 170);
+      text("x = " + nf(miNave.posicion.x, 0, 1) + " + " + nf(miNave.velocidad.x, 0, 2) + " t", 30, 188);
+      text("y = " + nf(miNave.posicion.y, 0, 1) + " + " + nf(miNave.velocidad.y, 0, 2) + " t", 30, 206);
+      text("z = " + nf(miNave.posicion.z, 0, 1) + " + " + nf(miNave.velocidad.z, 0, 2) + " t", 30, 224);
 
       Vector3D normalOrbital = miNave.posicion.productoCruz(miNave.velocidad);
       fill(255, 100, 100);
-      text("1.3 Producto Cruz (r x v) -> Vector Normal:", 20, 265);
-      text("N = " + nf(normalOrbital.x, 0, 1) + "i, " + nf(normalOrbital.y, 0, 1) + "j, " + nf(normalOrbital.z, 0, 1) + "k", 30, 285);
+      text("1.3 Producto Cruz (r x v) -> Vector Normal / Binormal:", 20, 250);
+      text("N = " + nf(normalOrbital.x, 0, 1) + "i, " + nf(normalOrbital.y, 0, 1) + "j, " + nf(normalOrbital.z, 0, 1) + "k", 30, 268);
 
       fill(100, 255, 255);
-      text("1.5 Ecuación del Plano Orbital:", 20, 315);
+      text("1.5 Ecuación del Plano Orbital:", 20, 294);
       if (normalOrbital.magnitud() < 0.001f) {
-        text("(r y v son paralelos: trayectoria rectilínea, plano no definido)", 30, 335);
+        text("(r y v son paralelos: trayectoria rectilínea, plano no definido)", 30, 312);
       } else {
         float D = -(normalOrbital.x * miNave.posicion.x + normalOrbital.y * miNave.posicion.y + normalOrbital.z * miNave.posicion.z);
-        text(nf(normalOrbital.x, 0, 1) + "x + " + nf(normalOrbital.y, 0, 1) + "y + " + nf(normalOrbital.z, 0, 1) + "z + (" + nf(D, 0, 1) + ") = 0", 30, 335);
+        text(nf(normalOrbital.x, 0, 1) + "x + " + nf(normalOrbital.y, 0, 1) + "y + " + nf(normalOrbital.z, 0, 1) + "z + (" + nf(D, 0, 1) + ") = 0", 30, 312);
       }
 
       Vector3D vectorHaciaObjetivo = objetivoMision.posicion.calcularDistancia(miNave.posicion);
+      float distObjetivo = vectorHaciaObjetivo.magnitud();
       float anguloGrados = degrees(miNave.velocidad.anguloEntre(vectorHaciaObjetivo));
       fill(150, 255, 100);
-      text("1.3 Aplicación de Producto Punto (Ángulo de Desviación):", 20, 365);
-      text("Ángulo Nave-" + objetivoMision.nombre + ": " + nf(anguloGrados, 0, 2) + "° (0° es rumbo perfecto)", 30, 385);
+      text("1.3 Producto Punto (Ángulo de Desviación hacia " + objetivoMision.nombre + "):", 20, 338);
+      text("Ángulo: " + nf(anguloGrados, 0, 2) + "° (0° es rumbo perfecto) | Dist: " + nf(distObjetivo, 0, 1) + " u", 30, 356);
+
+      // TEMA 3 (Cap. 11.7): Curvatura instantánea kappa = ||v x a|| / ||v||^3
+      float kappa = Vector3D.calcularCurvatura(miNave.velocidad, miNave.ultimaAceleracion);
+      String radioCurvTexto = (kappa > 0.00001f) ? (nf(1.0f / kappa, 0, 1) + " u") : "∞ (recta)";
+      fill(255, 200, 120);
+      text("Tema 3 (Cap. 11) Curvatura (κ = ‖v×a‖/‖v‖³):", 20, 382);
+      text("κ = " + nf(kappa, 0, 5) + " rad/u   |   Radio de curvatura (1/κ): " + radioCurvTexto, 30, 400);
+
+      // TEMAS 4 y 5 (Cap. 12.5): Potencial Gravitatorio escalar Phi(r) = -sum(G*M/r)
+      float potencialTotal = 0;
+      for (Planeta p : planetas) potencialTotal += p.calcularPotencialEnPunto(miNave.posicion);
+      fill(180, 220, 255);
+      text("Temas 4-5 (Cap. 12) Potencial Gravitatorio (g = -∇Φ): Φ = " + nf(potencialTotal, 0, 2), 20, 426);
+
+      // CAPÍTULO 13: Mecánica Orbital respecto al objetivo seleccionado
+      float vCirc = objetivoMision.velocidadCircularA(distObjetivo);
+      float vEsc = objetivoMision.velocidadEscapeA(distObjetivo);
+      fill(255, 230, 140);
+      text("Cap. 13 Mecánica Orbital (" + objetivoMision.nombre + "): v_circ = " + nf(vCirc, 0, 2) + " | v_escape = " + nf(vEsc, 0, 2), 20, 450);
+
+      fill(190); textSize(12);
+      text("Flechas 3D nave: Verde = v | Amarillo = F | Magenta = Normal (r×v)", 20, 476);
+      text("Ejes: Rojo = X | Verde = Y | Azul = Z   (Usa flechas ↑↓←→ para inclinar 3D)", 20, 494);
       popMatrix();
     }
+
+    hint(ENABLE_DEPTH_TEST);
   }
 
   void dibujarMenuPrincipal() {
     fill(0, 0, 0, 170); noStroke();
-    rect(0, height/2 - 160, width, 340);
+    rect(0, height/2.0f - 170, width, 360);
 
     fill(0, 200, 255);
     textSize(34); textAlign(CENTER);
-    text("SIMULADOR VECTORIAL ESPACIAL", width/2, height/2 - 100);
+    text("SIMULADOR VECTORIAL ESPACIAL", width/2.0f, height/2.0f - 100);
     fill(180); textSize(12);
-    text("Sol · Mercurio · Venus · Tierra+Luna · Marte · Júpiter · Saturno · Urano · Neptuno", width/2, height/2 - 68);
+    text("Sol · Mercurio · Venus · Tierra+Luna · Marte · Júpiter · Saturno · Urano · Neptuno", width/2.0f, height/2.0f - 68);
     fill(255); textSize(20);
-    text("1. MODO VUELO LIBRE (Sandbox)", width/2, height/2 - 10);
-    text("2. MODO MISIÓN (Educativo)", width/2, height/2 + 30);
+    text("1. MODO VUELO LIBRE (Sandbox)", width/2.0f, height/2.0f - 10);
+    text("2. MODO MISIÓN (Educativo)", width/2.0f, height/2.0f + 30);
     fill(150); textSize(13);
-    text("Presiona 1 o 2 para empezar | 'ESPACIO' activa el Modo Profesor", width/2, height/2 + 90);
+    text("Presiona 1 o 2 para empezar | 'ESPACIO' activa el Modo Profesor | 'F' Pantalla Completa", width/2.0f, height/2.0f + 90);
     textAlign(LEFT);
   }
 
@@ -409,20 +495,23 @@ public class SimuladorEspacial extends PApplet {
   // trabajar la aplicación de vectores (distinta masa, distinta
   // distancia = distinto reto).
   void dibujarSeleccionObjetivo() {
-    fill(0, 0, 0, 210); rect(60, 70, 680, 400);
+    float xCaja = width / 2.0f - 340;
+    float yCaja = height / 2.0f - 200;
+    fill(0, 0, 0, 210); rect(xCaja, yCaja, 680, 400, 8);
     fill(0, 200, 255); textSize(22); textAlign(CENTER);
-    text("MODO MISIÓN — Elige tu objetivo", width/2, 110);
+    text("MODO MISIÓN — Elige tu objetivo", width/2.0f, yCaja + 40);
     textAlign(LEFT); fill(255); textSize(14);
-    text("1. Luna       (cercana, ideal para empezar)      dist: " + nf(luna.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 150);
-    text("2. Venus      (dificultad media)                 dist: " + nf(venus.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 182);
-    text("3. Marte      (el clásico)                        dist: " + nf(marte.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 214);
-    text("4. Mercurio   (difícil: rápido y cerca del Sol)  dist: " + nf(mercurio.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 246);
-    text("5. Júpiter    (lejos, blanco enorme)              dist: " + nf(jupiter.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 278);
-    text("6. Saturno    (lejos, blanco enorme)              dist: " + nf(saturno.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 310);
-    text("7. Urano      (muy lejos)                         dist: " + nf(urano.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 342);
-    text("8. Neptuno    (el más lejano: máxima dificultad) dist: " + nf(neptuno.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", 100, 374);
+    float xTexto = xCaja + 40;
+    text("1. Luna       (cercana, ideal para empezar)      dist: " + nf(luna.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 80);
+    text("2. Venus      (dificultad media)                 dist: " + nf(venus.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 112);
+    text("3. Marte      (el clásico)                        dist: " + nf(marte.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 144);
+    text("4. Mercurio   (difícil: rápido y cerca del Sol)  dist: " + nf(mercurio.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 176);
+    text("5. Júpiter    (lejos, blanco enorme)              dist: " + nf(jupiter.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 208);
+    text("6. Saturno    (lejos, blanco enorme)              dist: " + nf(saturno.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 240);
+    text("7. Urano      (muy lejos)                         dist: " + nf(urano.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 272);
+    text("8. Neptuno    (el más lejano: máxima dificultad) dist: " + nf(neptuno.posicion.calcularDistancia(miNave.posicion).magnitud(), 0, 0) + " u", xTexto, yCaja + 304);
     fill(180); textSize(13);
-    text("Presiona el número de tu objetivo | 'M': Menú", 100, 430);
+    text("Presiona el número de tu objetivo | 'F': Pantalla Completa | 'M': Menú", xTexto, yCaja + 360);
   }
 
   void dibujarPizarronCalculo() {
@@ -484,32 +573,35 @@ public class SimuladorEspacial extends PApplet {
     boolean y200Ok = esCorrecto(inputCampos[5], y200Real);
     boolean z200Ok = esCorrecto(inputCampos[6], z200Real);
 
-    fill(0, 0, 0, 230); rect(120, 90, 560, 380);
+    float xCaja = width / 2.0f - 280;
+    float yCaja = height / 2.0f - 190;
+    fill(0, 0, 0, 230); rect(xCaja, yCaja, 560, 380, 8);
     textAlign(CENTER);
     fill(exito ? color(50, 255, 50) : color(255, 80, 80));
     textSize(24);
-    text(exito ? "¡MISIÓN CUMPLIDA!" : "OBJETIVO NO ALCANZADO", width/2, 135);
+    text(exito ? "¡MISIÓN CUMPLIDA!" : "OBJETIVO NO ALCANZADO", width/2.0f, yCaja + 45);
 
     fill(255); textSize(15);
-    text("Objetivo: " + objetivoMision.nombre, width/2, 168);
-    text("Distancia mínima alcanzada: " + nf(distanciaMinimaAlcanzada, 0, 1) + " u", width/2, 192);
+    text("Objetivo: " + objetivoMision.nombre, width/2.0f, yCaja + 78);
+    text("Distancia mínima alcanzada: " + nf(distanciaMinimaAlcanzada, 0, 1) + " u", width/2.0f, yCaja + 102);
     fill(255, 220, 100);
-    text("Margen de error: " + nf(margenError, 0, 1) + " u", width/2, 216);
+    text("Margen de error: " + nf(margenError, 0, 1) + " u", width/2.0f, yCaja + 126);
 
-    fill(0, 200, 255); textSize(15); text("VERIFICACIÓN DE TUS CÁLCULOS EXTRA", width/2, 250);
+    fill(0, 200, 255); textSize(15); text("VERIFICACIÓN DE TUS CÁLCULOS EXTRA", width/2.0f, yCaja + 160);
     textAlign(LEFT); textSize(13);
+    float xTexto = xCaja + 30;
     fill(magOk ? color(80, 255, 80) : color(255, 100, 100));
-    text((magOk ? "✓ " : "✗ ") + "Magnitud |V|: escribiste " + nf(inputCampos[3], 0, 3) + " — real: " + nf(magReal, 0, 3), 150, 278);
+    text((magOk ? "✓ " : "✗ ") + "Magnitud |V|: escribiste " + nf(inputCampos[3], 0, 3) + " — real: " + nf(magReal, 0, 3), xTexto, yCaja + 188);
     fill(x200Ok ? color(80, 255, 80) : color(255, 100, 100));
-    text((x200Ok ? "✓ " : "✗ ") + "X(200): escribiste " + nf(inputCampos[4], 0, 1) + " — real: " + nf(x200Real, 0, 1), 150, 300);
+    text((x200Ok ? "✓ " : "✗ ") + "X(200): escribiste " + nf(inputCampos[4], 0, 1) + " — real: " + nf(x200Real, 0, 1), xTexto, yCaja + 210);
     fill(y200Ok ? color(80, 255, 80) : color(255, 100, 100));
-    text((y200Ok ? "✓ " : "✗ ") + "Y(200): escribiste " + nf(inputCampos[5], 0, 1) + " — real: " + nf(y200Real, 0, 1), 150, 322);
+    text((y200Ok ? "✓ " : "✗ ") + "Y(200): escribiste " + nf(inputCampos[5], 0, 1) + " — real: " + nf(y200Real, 0, 1), xTexto, yCaja + 232);
     fill(z200Ok ? color(80, 255, 80) : color(255, 100, 100));
-    text((z200Ok ? "✓ " : "✗ ") + "Z(200): escribiste " + nf(inputCampos[6], 0, 1) + " — real: " + nf(z200Real, 0, 1), 150, 344);
+    text((z200Ok ? "✓ " : "✗ ") + "Z(200): escribiste " + nf(inputCampos[6], 0, 1) + " — real: " + nf(z200Real, 0, 1), xTexto, yCaja + 254);
 
     textAlign(CENTER);
     fill(200); textSize(14);
-    text("'R': reintentar con nuevos cálculos | 'M': Menú", width/2, 445);
+    text("'R': reintentar con nuevos cálculos | 'M': Menú", width/2.0f, yCaja + 355);
     textAlign(LEFT);
   }
 
@@ -530,12 +622,15 @@ public class SimuladorEspacial extends PApplet {
     }
   }
 
-  // Para el Modo Misión: detecta el fin (llegada, perdido, o se acabó
-  // el tiempo) y pasa a la pantalla de Resultado.
+  // Para el Modo Misión: detecta el fin (llegada a la superficie o paso por el
+  // punto más cercano dentro del umbral de éxito, perdido, o se acabó el tiempo)
+  // y pasa a la pantalla de Resultado.
   void verificarFinMision() {
     boolean termino = false;
+    float distanciaActual = objetivoMision.posicion.calcularDistancia(miNave.posicion).magnitud();
     if (miNave.posicion.magnitud() > LIMITE_MUNDO) termino = true;
-    if (objetivoMision.posicion.calcularDistancia(miNave.posicion).magnitud() < objetivoMision.radioVisual + 70) termino = true;
+    if (distanciaActual <= objetivoMision.radioVisual) termino = true;
+    if (distanciaMinimaAlcanzada < objetivoMision.radioVisual + 70 && distanciaActual > distanciaMinimaAlcanzada + 1.0f) termino = true;
     if (framesSimulacion >= MAX_FRAMES_SIMULACION) termino = true;
 
     if (termino) {
@@ -644,6 +739,18 @@ public class SimuladorEspacial extends PApplet {
   @Override
   public void keyReleased() {
     if (key == ' ') modoProfesor = !modoProfesor;
+    if (key == 'f' || key == 'F') alternarPantallaCompleta();
+    if (key == 'c' || key == 'C') {
+      seguirNave = !seguirNave;
+      if (seguirNave) {
+        camX = 0;
+        camY = 0;
+      }
+    }
+    if (key == 'v' || key == 'V') {
+      camX = 0; camY = 0; focoX = 0; focoY = 0; focoZ = 0;
+      zoom = -2600; rotX = 0; rotY = 0; seguirNave = false;
+    }
     if ((key == 'r' || key == 'R') && estadoJuego == 5) {
       reiniciarNave();
       estadoJuego = 3; // vuelve al pizarrón, mismo objetivo (y buffers), a intentar de nuevo
@@ -652,10 +759,25 @@ public class SimuladorEspacial extends PApplet {
   }
 
   @Override
-  public void mouseDragged() { if (estadoJuego != 0) { camX += (mouseX - pmouseX) * SENSIBILIDAD_ARRASTRE; camY += (mouseY - pmouseY) * SENSIBILIDAD_ARRASTRE; } }
+  public void mouseDragged() {
+    if (estadoJuego != 0) {
+      if (mouseButton == RIGHT) {
+        rotY += (mouseX - pmouseX) * 0.007f;
+        rotX -= (mouseY - pmouseY) * 0.007f;
+      } else {
+        seguirNave = false;
+        camX = constrain(camX + (mouseX - pmouseX) * SENSIBILIDAD_ARRASTRE, -LIMITE_MUNDO, LIMITE_MUNDO);
+        camY = constrain(camY + (mouseY - pmouseY) * SENSIBILIDAD_ARRASTRE, -LIMITE_MUNDO, LIMITE_MUNDO);
+      }
+    }
+  }
 
   @Override
-  public void mouseWheel(MouseEvent event) { if (estadoJuego != 0) zoom -= event.getCount() * SENSIBILIDAD_ZOOM; }
+  public void mouseWheel(MouseEvent event) {
+    if (estadoJuego != 0) {
+      zoom = constrain(zoom - event.getCount() * SENSIBILIDAD_ZOOM, ZOOM_MIN, ZOOM_MAX);
+    }
+  }
 
   void dibujarOrbitas() {
     noFill(); strokeWeight(1); stroke(150, 150, 200, 45);
@@ -701,8 +823,10 @@ public class SimuladorEspacial extends PApplet {
     for (int i = -limite; i <= limite; i += espaciado) {
       line(i, -limite, 0, i, limite, 0); line(-limite, i, 0, limite, i, 0);
     }
+    // Eje X (rojo), Eje Y (verde) y Eje Z (azul) en R^3
     stroke(255, 50, 50, 200); strokeWeight(3); line(-limite, 0, 0, limite, 0, 0);
     stroke(50, 255, 50, 200); strokeWeight(3); line(0, -limite, 0, 0, limite, 0);
+    stroke(70, 160, 255, 200); strokeWeight(3); line(0, 0, -limite/2.0f, 0, 0, limite/2.0f);
     fill(255); noStroke(); ellipse(0, 0, 10, 10);
     popMatrix();
   }

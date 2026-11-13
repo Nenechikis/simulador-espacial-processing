@@ -17,6 +17,7 @@ public class Nave {
   Vector3D posicion;
   Vector3D velocidad;
   Vector3D aceleracion;
+  Vector3D ultimaAceleracion; // Guarda r''(t) del cuadro actual para curvatura y Frenet (Tema 3)
   float masa;
   float combustible;
   boolean estaPropulsando;
@@ -30,6 +31,7 @@ public class Nave {
     posicion = new Vector3D(x, y, z);
     velocidad = new Vector3D(0, 0, 0);
     aceleracion = new Vector3D(0, 0, 0);
+    ultimaAceleracion = new Vector3D(0, 0, 0);
     masa = 1.0f;
     combustible = 100.0f;
     estaPropulsando = false;
@@ -65,6 +67,7 @@ public class Nave {
   void actualizar() {
     if (!viva) return; // Si ya no está viva, ignoramos la física y ya no se mueve
 
+    ultimaAceleracion = aceleracion.copia();
     velocidad.sumar(aceleracion);
     posicion.sumar(velocidad);
     aceleracion.multiplicar(0);
@@ -118,9 +121,10 @@ public class Nave {
     app.popMatrix();
   }
 
-  // TEMA 1.1 (interpretación geométrica) + 1.6 (aplicación):
-  // dibuja el vector velocidad (verde) y el vector fuerza neta
-  // (amarillo) como flechas 3D ancladas en la nave, para que se
+  // TEMA 1.1 (interpretación geométrica) + 1.6 (aplicación) + TEMA 3 (Marco de Frenet):
+  // dibuja el vector velocidad (verde), el vector fuerza neta
+  // (amarillo) y la binormal / normal al plano orbital B = T x N (magenta)
+  // como flechas 3D ancladas en la nave, para que se
   // "vea" lo que normalmente solo son números.
   void dibujarVectores(Vector3D fuerzaActual) {
     app.pushMatrix();
@@ -130,6 +134,13 @@ public class Nave {
     // completo, los vectores a escala real quedan invisibles.
     dibujarFlecha(velocidad.x * 40, velocidad.y * 40, velocidad.z * 40, app.color(0, 255, 0));
     dibujarFlecha(fuerzaActual.x * 600, fuerzaActual.y * 600, fuerzaActual.z * 600, app.color(255, 255, 0));
+
+    // Vector Normal al plano orbital / Binormal (N = r x v), en magenta (Cap. 6.5 y 11.6)
+    Vector3D normalOrb = posicion.productoCruz(velocidad);
+    if (normalOrb.magnitud() > 0.001f) {
+      normalOrb.normalizar();
+      dibujarFlecha(normalOrb.x * 95, normalOrb.y * 95, normalOrb.z * 95, app.color(255, 80, 255));
+    }
 
     app.popMatrix();
   }
